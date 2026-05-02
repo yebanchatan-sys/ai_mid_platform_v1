@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # --- 模型推理引擎：Ollama ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai_engine_ollama
+    volumes:
+      - ${NAS_PATH:-/mnt/nas_ai}/ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: always
+
+  # --- AI 交互中心：Open WebUI ---
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ai_ui_portal
+    volumes:
+      - ${NAS_PATH:-/mnt/nas_ai}/open-webui:/app/backend/data
+    depends_on:
+      - ollama
+    ports:
+      - "3000:8080"
+    environment:
+      - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - 'WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-super_secret_key_123}'
+    restart: always
+
+  # --- 向量数据库：Qdrant ---
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ai_vector_db
+    volumes:
+      - ${NAS_PATH:-/mnt/nas_ai}/qdrant_storage:/qdrant/storage
+    ports:
+      - "6333:6333"
+    restart: always
+
+  # --- 自动化工作流：n8n ---
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: ai_workflow_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${SERVER_IP:-localhost}
+    volumes:
+      - ${NAS_PATH:-/mnt/nas_ai}/n8n_data:/home/node/.n8n
+    restart: always
